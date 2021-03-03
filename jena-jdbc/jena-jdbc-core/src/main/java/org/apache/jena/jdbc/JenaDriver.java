@@ -39,7 +39,6 @@ import java.util.Properties;
 import org.apache.jena.jdbc.connections.JenaConnection;
 import org.apache.jena.jdbc.postprocessing.ResultsPostProcessor;
 import org.apache.jena.jdbc.preprocessing.CommandPreProcessor;
-import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -189,19 +188,12 @@ public abstract class JenaDriver implements Driver {
     public static final String PARAM_PASSWORD = "password";
 
     /**
-     * Constant for the connection URL parameter used to set the path to a log4j
-     * properties file used to configure logging. When set to a file the file
-     * system is searched before the class path (since on the class path you are
-     * more likely to have duplicates particularly if using a standard name like
-     * <strong>log4j.properties</strong>).
-     * <p>
-     * When not set this defaults to the special value <strong>no-auto</strong>
-     * provided by the constant {@link #NO_AUTO_LOGGING_CONFIGURATION} that
-     * indicates that the driver should not configure any logging. This is
-     * useful if you want to have your application managed its own
-     * configuration.
-     * </p>
+     * Old connection URL parameter connected with Log4j 1.x configuration that
+     * is no longer supported in Jena 4.x
+     * 
+     * @deprecated No longer supported as of Jena 4.x
      */
+    @Deprecated
     public static final String PARAM_LOGGING = "logging";
 
     /**
@@ -218,9 +210,9 @@ public abstract class JenaDriver implements Driver {
      * string and pick up different configurations depending on where the driver
      * is used.
      * <p>
-     * Just like the {@link #PARAM_LOGGING} parameter the file system is
+     * For this parameter the file system is
      * searched before the class path. Also note that this is the first
-     * parameter that is honored so settings present in the properties file may
+     * parameter that is honoured so settings present in the properties file may
      * be overridden by those explicitly provided in the connection URL or those
      * given in the {@link Properties} object passed to the
      * {@link Driver#connect(String, Properties)} method.
@@ -284,31 +276,14 @@ public abstract class JenaDriver implements Driver {
         Properties ps = this.getEffectiveProperties(url, props);
         this.modifyProperties(ps);
 
-        // Configure logging appropriately
+        // Configuration of logging is no longer supported as of Jena 4.x
+        // If user connection URL is still trying to utilize this feature then log a warning
         String logConfig = ps.getProperty(PARAM_LOGGING);
         if (logConfig == null || logConfig.trim().length() == 0) {
             logConfig = NO_AUTO_LOGGING_CONFIGURATION;
         }
-
-        // Unless set to no configuration (which is the default attempt to
-        // configure)
         if (!logConfig.equals(NO_AUTO_LOGGING_CONFIGURATION)) {
-            // Search file system first
-            File logConfigFile = new File(logConfig);
-            if (logConfigFile.exists() && logConfigFile.isFile()) {
-                PropertyConfigurator.configure(logConfig);
-                LOGGER.info("Successfully configured logging using log file " + logConfigFile.getAbsolutePath());
-            } else {
-                // Otherwise try class path
-                URL logURL = this.getClass().getResource(logConfig);
-                if (logURL != null) {
-                    PropertyConfigurator.configure(logURL);
-                    LOGGER.info("Successfully configured logging using class path resource " + logConfig);
-                } else {
-                    throw new SQLException(
-                            "Unable to locate the specified log4j configuration file on either the file system or the class path");
-                }
-            }
+            LOGGER.warn("Jena Drivers can no longer configured logging themselves as of Jena 4.x - Please configure logging directly");
         }
 
         // Figure out desired JDBC compatibility level
@@ -340,8 +315,8 @@ public abstract class JenaDriver implements Driver {
                 } else {
                     // Parameter set to some unexpected type
                     LOGGER.error("Driver Parameter " + PARAM_PRE_PROCESSOR + " has unexpected invalid value");
-                    throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR + " was set to a value of unexpected type "
-                            + ppObj.getClass().getCanonicalName()
+                    throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR
+                            + " was set to a value of unexpected type " + ppObj.getClass().getCanonicalName()
                             + ", expected either a String or List<String> as the parameter value");
                 }
 
@@ -369,62 +344,42 @@ public abstract class JenaDriver implements Driver {
                             // Otherwise throw an error
                             LOGGER.error("Invalid value for " + PARAM_PRE_PROCESSOR
                                     + " parameter, references a class that exists but does not implement the required interface");
-                            throw new SQLException(
-                                    "Parameter "
-                                            + PARAM_PRE_PROCESSOR
-                                            + " includes the value "
-                                            + ppClassName
-                                            + " which references a class that does not implement the expected CommandPreProcessor interface, please ensure that the class name is corect and that the class implements the required interface");
+                            throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR + " includes the value "
+                                    + ppClassName
+                                    + " which references a class that does not implement the expected CommandPreProcessor interface, please ensure that the class name is corect and that the class implements the required interface");
                         }
                     } catch (ClassNotFoundException e) {
                         // Unable to find the referenced class
                         LOGGER.error("Invalid value for " + PARAM_PRE_PROCESSOR
                                 + " parameter, references a class that did not exist", e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_PRE_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which references a class that could not be found, please ensure that the class name is correct and the JAR containing this class is on your class path",
+                        throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR + " includes the value " + ppClassName
+                                + " which references a class that could not be found, please ensure that the class name is correct and the JAR containing this class is on your class path",
                                 e);
                     } catch (InstantiationException e) {
                         // Unable to instantiate the referenced class
                         LOGGER.error("Invalid value for " + PARAM_PRE_PROCESSOR
-                                + " parameter, references a class that exists but does not have an appropriate constructor", e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_PRE_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which references a class that could not be sucessfully instantiated, this class must have an unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPreProcessor() on the returned JenaConnection instead",
+                                + " parameter, references a class that exists but does not have an appropriate constructor",
+                                e);
+                        throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR + " includes the value " + ppClassName
+                                + " which references a class that could not be sucessfully instantiated, this class must have an unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPreProcessor() on the returned JenaConnection instead",
                                 e);
                     } catch (IllegalAccessException e) {
                         // Referenced class is not accessible
                         LOGGER.error("Invalid value for " + PARAM_PRE_PROCESSOR
                                 + " parameter, references a class that exists but is inaccessible", e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_PRE_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which references a class that could not be sucessfully instantiated, this class must have a publicly accessible unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPreProcessor() on the returned JenaConnection instead",
+                        throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR + " includes the value " + ppClassName
+                                + " which references a class that could not be sucessfully instantiated, this class must have a publicly accessible unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPreProcessor() on the returned JenaConnection instead",
                                 e);
                     } catch (SQLException e) {
                         // Throw as-is
                         throw e;
                     } catch (Exception e) {
                         // Unexpected error
-                        LOGGER.error(
-                                "Invalid value for "
-                                        + PARAM_PRE_PROCESSOR
-                                        + " parameter, references a class that attempting to initialize produced an unexpected exception",
+                        LOGGER.error("Invalid value for " + PARAM_PRE_PROCESSOR
+                                + " parameter, references a class that attempting to initialize produced an unexpected exception",
                                 e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_PRE_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which caused an unexpected exception when trying to instantiate it, see the inner exception for details",
+                        throw new SQLException("Parameter " + PARAM_PRE_PROCESSOR + " includes the value " + ppClassName
+                                + " which caused an unexpected exception when trying to instantiate it, see the inner exception for details",
                                 e);
                     }
                 }
@@ -445,8 +400,8 @@ public abstract class JenaDriver implements Driver {
                 } else {
                     // Parameter set to some unexpected type
                     LOGGER.error("Driver Parameter " + PARAM_POST_PROCESSOR + " has unexpected invalid value");
-                    throw new SQLException("Parameter " + PARAM_POST_PROCESSOR + " was set to a value of unexpected type "
-                            + ppObj.getClass().getCanonicalName()
+                    throw new SQLException("Parameter " + PARAM_POST_PROCESSOR
+                            + " was set to a value of unexpected type " + ppObj.getClass().getCanonicalName()
                             + ", expected either a String or List<String> as the parameter value");
                 }
 
@@ -474,62 +429,46 @@ public abstract class JenaDriver implements Driver {
                             // Otherwise throw an error
                             LOGGER.error("Invalid value for " + PARAM_POST_PROCESSOR
                                     + " parameter, references a class that exists but does not implement the required interface");
-                            throw new SQLException(
-                                    "Parameter "
-                                            + PARAM_POST_PROCESSOR
-                                            + " includes the value "
-                                            + ppClassName
-                                            + " which references a class that does not implement the expected ResultsPostProcessor interface, please ensure that the class name is corect and that the class implements the required interface");
+                            throw new SQLException("Parameter " + PARAM_POST_PROCESSOR + " includes the value "
+                                    + ppClassName
+                                    + " which references a class that does not implement the expected ResultsPostProcessor interface, please ensure that the class name is corect and that the class implements the required interface");
                         }
                     } catch (ClassNotFoundException e) {
                         // Unable to find the referenced class
                         LOGGER.error("Invalid value for " + PARAM_POST_PROCESSOR
                                 + " parameter, references a class that did not exist", e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_POST_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which references a class that could not be found, please ensure that the class name is correct and the JAR containing this class is on your class path",
+                        throw new SQLException("Parameter " + PARAM_POST_PROCESSOR + " includes the value "
+                                + ppClassName
+                                + " which references a class that could not be found, please ensure that the class name is correct and the JAR containing this class is on your class path",
                                 e);
                     } catch (InstantiationException e) {
                         // Unable to instantiate the referenced class
                         LOGGER.error("Invalid value for " + PARAM_POST_PROCESSOR
-                                + " parameter, references a class that exists but does not have an appropriate constructor", e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_POST_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which references a class that could not be sucessfully instantiated, this class must have an unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPostProcessor() on the returned JenaConnection instead",
+                                + " parameter, references a class that exists but does not have an appropriate constructor",
+                                e);
+                        throw new SQLException("Parameter " + PARAM_POST_PROCESSOR + " includes the value "
+                                + ppClassName
+                                + " which references a class that could not be sucessfully instantiated, this class must have an unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPostProcessor() on the returned JenaConnection instead",
                                 e);
                     } catch (IllegalAccessException e) {
                         // Referenced class is not accessible
                         LOGGER.error("Invalid value for " + PARAM_POST_PROCESSOR
                                 + " parameter, references a class that exists but is inaccessible", e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_POST_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which references a class that could not be sucessfully instantiated, this class must have a publicly accessible unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPostProcessor() on the returned JenaConnection instead",
+                        throw new SQLException("Parameter " + PARAM_POST_PROCESSOR + " includes the value "
+                                + ppClassName
+                                + " which references a class that could not be sucessfully instantiated, this class must have a publicly accessible unparameterized constructor to be usable with this parameter.  If this is not possible try calling addPostProcessor() on the returned JenaConnection instead",
                                 e);
                     } catch (SQLException e) {
                         // Throw as-is
                         throw e;
                     } catch (Exception e) {
                         // Unexpected error
-                        LOGGER.error(
-                                "Invalid value for "
-                                        + PARAM_POST_PROCESSOR
-                                        + " parameter, references a class that attempting to initialize produced an unexpected exception",
+                        LOGGER.error("Invalid value for " + PARAM_POST_PROCESSOR
+                                + " parameter, references a class that attempting to initialize produced an unexpected exception",
                                 e);
-                        throw new SQLException(
-                                "Parameter "
-                                        + PARAM_POST_PROCESSOR
-                                        + " includes the value "
-                                        + ppClassName
-                                        + " which caused an unexpected exception when trying to instantiate it, see the inner exception for details",
+                        throw new SQLException("Parameter " + PARAM_POST_PROCESSOR + " includes the value "
+                                + ppClassName
+                                + " which caused an unexpected exception when trying to instantiate it, see the inner exception for details",
                                 e);
                     }
                 }
@@ -544,7 +483,8 @@ public abstract class JenaDriver implements Driver {
         } catch (Exception e) {
             abort = true;
             LOGGER.error("Unexpected exception while establishing a connection", e);
-            throw new SQLException("Unexpected exception while establishing a connection, see inner exception for details", e);
+            throw new SQLException(
+                    "Unexpected exception while establishing a connection, see inner exception for details", e);
         } finally {
             // If something has gone badly wrong close the connection
             if (abort && conn != null) {
@@ -577,105 +517,77 @@ public abstract class JenaDriver implements Driver {
         // Parse out the key value pairs from the connection URL
         url = url.substring(DRIVER_PREFIX.length() + this.implPrefix.length());
         String[] kvps = url.split("&|;");
-        for ( String kvp : kvps )
-        {
-            if ( kvp.length() == 0 )
-            {
+        for (String kvp : kvps) {
+            if (kvp.length() == 0) {
                 continue;
             }
 
             // Try to split into key and value
             String key, value;
-            if ( kvp.contains( "=" ) )
-            {
-                String[] temp = kvp.split( "=", 2 );
+            if (kvp.contains("=")) {
+                String[] temp = kvp.split("=", 2);
                 key = temp[0];
                 value = temp[1];
-            }
-            else
-            {
+            } else {
                 key = kvp;
                 value = null;
             }
 
             // All keys are normalized to lower case using the English Locale
-            key = key.toLowerCase( Locale.ENGLISH );
+            key = key.toLowerCase(Locale.ENGLISH);
 
             // Put into properties appropriately
-            if ( !ps.containsKey( key ) )
-            {
+            if (!ps.containsKey(key)) {
                 // Doesn't yet exist, add a string/list as appropriate
-                if ( this.allowsMultipleValues( key ) )
-                {
+                if (this.allowsMultipleValues(key)) {
                     List<String> values = new ArrayList<>();
-                    if ( value.contains( "," ) )
-                    {
+                    if (value.contains(",")) {
                         // Comma separated lists are usable for multiple value
                         // properties
-                        String[] vs = value.split( "," );
-                        for ( String v : vs )
-                        {
-                            values.add( v );
+                        String[] vs = value.split(",");
+                        for (String v : vs) {
+                            values.add(v);
                         }
+                    } else {
+                        values.add(value);
                     }
-                    else
-                    {
-                        values.add( value );
-                    }
-                    ps.put( key, values );
+                    ps.put(key, values);
+                } else {
+                    ps.put(key, value);
                 }
-                else
-                {
-                    ps.put( key, value );
-                }
-            }
-            else if ( this.allowsMultipleValues( key ) )
-            {
+            } else if (this.allowsMultipleValues(key)) {
                 // If it allows multiple values append to those existing
-                Object currValue = ps.get( key );
-                if ( currValue instanceof List<?> )
-                {
+                Object currValue = ps.get(key);
+                if (currValue instanceof List<?>) {
                     // Can just append to existing list
-                    if ( value.contains( "," ) )
-                    {
+                    if (value.contains(",")) {
                         // Comma separated lists are usable for multiple value
                         // properties
-                        String[] vs = value.split( "," );
-                        for ( String v : vs )
-                        {
-                            ( (List<Object>) currValue ).add( v );
+                        String[] vs = value.split(",");
+                        for (String v : vs) {
+                            ((List<Object>) currValue).add(v);
                         }
+                    } else {
+                        ((List<Object>) currValue).add(value);
                     }
-                    else
-                    {
-                        ( (List<Object>) currValue ).add( value );
-                    }
-                }
-                else
-                {
+                } else {
                     // Convert to list
                     List<String> values = new ArrayList<>();
-                    values.add( currValue.toString() );
-                    if ( value.contains( "," ) )
-                    {
-                        String[] vs = value.split( "," );
-                        for ( String v : vs )
-                        {
-                            values.add( v );
+                    values.add(currValue.toString());
+                    if (value.contains(",")) {
+                        String[] vs = value.split(",");
+                        for (String v : vs) {
+                            values.add(v);
                         }
+                    } else {
+                        values.add(value);
                     }
-                    else
-                    {
-                        values.add( value );
-                    }
-                    ps.put( key, values );
+                    ps.put(key, values);
                 }
-            }
-            else
-            {
-                LOGGER.warn( "Cannot specify parameter " + key + " multiple times in the connection URL" );
-                throw new SQLException( "Invalid connection URL parameter " + kvp + " encountered, the parameter " + key
-                                            + " may only be specified once" );
+            } else {
+                LOGGER.warn("Cannot specify parameter " + key + " multiple times in the connection URL");
+                throw new SQLException("Invalid connection URL parameter " + kvp + " encountered, the parameter " + key
+                        + " may only be specified once");
             }
         }
 
@@ -762,7 +674,8 @@ public abstract class JenaDriver implements Driver {
                 throw new SQLException("Located external properties file " + propFile.getAbsolutePath()
                         + " on file system but it was removed before it could be read", e);
             } catch (IOException e) {
-                throw new SQLException("IO Error attempting to load external properties file " + propFile.getAbsolutePath());
+                throw new SQLException(
+                        "IO Error attempting to load external properties file " + propFile.getAbsolutePath());
             }
             LOGGER.info("Successfully loaded external properties file " + propFile.getAbsolutePath());
         } else {
@@ -774,7 +687,8 @@ public abstract class JenaDriver implements Driver {
                     ps.load(input);
                     input.close();
                 } catch (IOException e) {
-                    throw new SQLException("IO Error attempting to load class path properties file from resource " + resource, e);
+                    throw new SQLException(
+                            "IO Error attempting to load class path properties file from resource " + resource, e);
                 }
                 LOGGER.info("Successfully loaded class path properties file from resource " + resource);
             } else {
@@ -875,8 +789,8 @@ public abstract class JenaDriver implements Driver {
         List<DriverPropertyInfo> baseProps = new ArrayList<>();
 
         // JDBC compatibility level
-        DriverPropertyInfo jdbcCompatLevel = new DriverPropertyInfo(PARAM_JDBC_COMPATIBILITY, ps.getProperty(
-                PARAM_JDBC_COMPATIBILITY, Integer.toString(JdbcCompatibility.DEFAULT)));
+        DriverPropertyInfo jdbcCompatLevel = new DriverPropertyInfo(PARAM_JDBC_COMPATIBILITY,
+                ps.getProperty(PARAM_JDBC_COMPATIBILITY, Integer.toString(JdbcCompatibility.DEFAULT)));
         jdbcCompatLevel.description = "Configures how compatible the driver will attempt to be with JDBC, primarily affects reported column types for result sets";
         jdbcCompatLevel.required = false;
         String[] choices = new String[9];
@@ -887,8 +801,8 @@ public abstract class JenaDriver implements Driver {
         baseProps.add(jdbcCompatLevel);
 
         // Pre-processors
-        DriverPropertyInfo preProcessor = new DriverPropertyInfo(PARAM_PRE_PROCESSOR, String.join(",",
-                this.getValues(ps, PARAM_PRE_PROCESSOR)));
+        DriverPropertyInfo preProcessor = new DriverPropertyInfo(PARAM_PRE_PROCESSOR,
+                String.join(",", this.getValues(ps, PARAM_PRE_PROCESSOR)));
         preProcessor.description = "Configures pre-processors which are used to amend SPARQL text, queries or updates before these are passed to the underlying SPARQL engine, multiple fully qualified class names may be specified";
         preProcessor.required = false;
         baseProps.add(preProcessor);
@@ -913,7 +827,8 @@ public abstract class JenaDriver implements Driver {
      * @param start
      *            Index in the final properties array at which to start copying
      */
-    protected final void copyBaseProperties(DriverPropertyInfo[] finalProps, List<DriverPropertyInfo> baseProps, int start) {
+    protected final void copyBaseProperties(DriverPropertyInfo[] finalProps, List<DriverPropertyInfo> baseProps,
+            int start) {
         for (int i = start, j = 0; i < finalProps.length && j < baseProps.size(); i++, j++) {
             finalProps[i] = baseProps.get(j);
         }
@@ -928,7 +843,8 @@ public abstract class JenaDriver implements Driver {
      *            Base driver properties supported by the driver
      * @return Driver property information
      */
-    protected abstract DriverPropertyInfo[] getPropertyInfo(Properties connProps, List<DriverPropertyInfo> baseDriverProps);
+    protected abstract DriverPropertyInfo[] getPropertyInfo(Properties connProps,
+            List<DriverPropertyInfo> baseDriverProps);
 
     /**
      * Returns that a Jena JDBC driver is not JDBC compliant since strict JDBC
@@ -1045,9 +961,9 @@ public abstract class JenaDriver implements Driver {
         return value.equals(actualValue);
     }
 
-	// Java6/7 compatibility
-	@Override
+    // Java6/7 compatibility
+    @Override
     public java.util.logging.Logger getParentLogger() throws SQLFeatureNotSupportedException {
-		throw new SQLFeatureNotSupportedException() ;
-	}
+        throw new SQLFeatureNotSupportedException();
+    }
 }
